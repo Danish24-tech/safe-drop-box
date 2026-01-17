@@ -86,3 +86,61 @@ void Servo_Go(uint32_t pos, uint32_t moveTime) {
     delay_ms(moveTime);       // call to subroutine
     TIM2->CCER &= ~TIM_CCER_CC1E;
 }
+
+//Nadhif
+
+/* ================= PART 3 – MAIN CONTROL LOGIC ================= */
+
+int main(void) {
+
+    // Initialize SysTick for 1 ms interrupts
+    SysTick_Config(16000); // 1 ms tick → INTERRUPT used here
+
+    Button_Init();
+    LED_Init();
+    IR_Init();
+    TIM2_PWM_Init();
+
+    // Start with lid closed? Change to STATE_OPENED if needed
+    enum { STATE_CLOSED, STATE_OPENED } state = STATE_CLOSED;
+    uint32_t openTime = 0;
+
+    while (1) {
+
+        // LED shows item presence
+        if (IR_Detected()) LED_On();
+        else LED_Off();
+
+        switch (state) {
+
+            /* -------- CLOSED -------- */
+            case STATE_CLOSED:
+                if (Button_Pressed()) {
+                    Servo_Go(SERVO_OPEN_VAL, MOVE_TIME_OPEN);  // Subroutine called
+                    openTime = msTicks;
+                    state = STATE_OPENED;
+
+                    while (Button_Pressed()); // simple debounce
+                }
+                break;
+
+            /* -------- OPENED -------- */
+            case STATE_OPENED:
+                if (IR_Detected()) {
+                    if ((msTicks - openTime) >= CLOSE_TIME_ITEM) {
+                        Servo_Go(SERVO_CLOSE_VAL, MOVE_TIME_CLOSE); // Subroutine
+                        state = STATE_CLOSED;
+                    }
+                }
+                else {
+                    if ((msTicks - openTime) >= CLOSE_TIME_NO_ITEM) {
+                        Servo_Go(SERVO_CLOSE_VAL, MOVE_TIME_CLOSE); // Subroutine
+                        state = STATE_CLOSED;
+                    }
+                }
+                break;
+        }
+
+        delay_ms(20); // Subroutine
+    }
+}
